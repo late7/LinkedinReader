@@ -1,0 +1,5 @@
+# Ignore generated Excel workbooks
+*.xlsx
+
+# Keep the source workbook committed
+!LinkedIN.xlsx
