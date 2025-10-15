@@ -73,48 +73,89 @@ def extract_investor_data(data):
         if not block.strip():
             continue
 
-        # Extract lines
+        # Split into lines and clean
         lines = [l.strip() for l in block.splitlines() if l.strip()]
-        text = " ".join(lines)
-
-        # ---- Extract fields ----
-        name_match = re.search(r'([A-Za-z0-9&.,\-\s]+?)\s+(?:logo|B2B|B2C|B2G)', text)
-        company_name = name_match.group(1).strip() if name_match else ""
+        if len(lines) < 3:  # Need at least company type, name, and location
+            continue
         
-        # Remove "investor" prefix if present (case insensitive)
-        if company_name.lower().startswith('investor '):
-            company_name = company_name[9:].strip()
-
-        # Location & year
-        loc_match = re.search(r'([A-Za-z\s,]+)\s•\s(\d{4})', text)
-        location = loc_match.group(1).strip() if loc_match else ""
-        year = loc_match.group(2).strip() if loc_match else ""
+        # Extract company type (first line after "View company")
+        company_type = lines[0] if lines[0] else ""
         
-        # Remove "investor" prefix from location if present (case insensitive)
-        if location.lower().startswith('investor '):
-            location = location[9:].strip()
-
-        # Focus areas (B2B / B2C / B2G)
-        focus = ", ".join(re.findall(r'\bB2[BGC]\b', text))
-
-        # Description (between focus area(s) and "Team of")
-        desc_match = re.search(r'(?:B2[BGC]\s*)+(.*?)(?:Team of)', text)
-        description = desc_match.group(1).strip() if desc_match else ""
-
-        # Team info
-        team_match = re.search(r'Team of\s+(\d+)\s+•\s+([A-Za-z\s,]+)', text)
-        team_size = team_match.group(1) if team_match else ""
-        team_members = team_match.group(2).strip() if team_match else ""
-
-        # Notable investments
-        invest_match = re.search(r'Notable Investments\s*(.*?)\s*(?:Ticket Size|$)', text)
-        notable_investments = invest_match.group(1).strip() if invest_match else ""
-
-        # Ticket size
-        ticket_match = re.search(r'Ticket Size\s*([0-9kM\-–]+)', text)
-        ticket_size = ticket_match.group(1).strip() if ticket_match else ""
+        # Skip logo line and find company name
+        company_name = ""
+        location_line = ""
+        remaining_lines = []
+        
+        # Find company name (skip logo lines)
+        name_start_idx = 1
+        for i in range(1, len(lines)):
+            if not lines[i].endswith(' logo') and not lines[i].startswith('+'):
+                # Check if this looks like a location line (contains country code and year)
+                if re.search(r',\s[A-Z]{2}\s•\s\d{4}', lines[i]):
+                    location_line = lines[i]
+                    remaining_lines = lines[i+1:]
+                    break
+                else:
+                    # This should be the company name
+                    company_name = lines[i]
+                    # Look for location line next
+                    if i+1 < len(lines) and re.search(r',\s[A-Z]{2}\s•\s\d{4}', lines[i+1]):
+                        location_line = lines[i+1]
+                        remaining_lines = lines[i+2:]
+                        break
+        
+        # Parse location and year
+        location = ""
+        year = ""
+        if location_line:
+            loc_match = re.search(r'([^•]+)\s•\s(\d{4})', location_line)
+            if loc_match:
+                location = loc_match.group(1).strip()
+                year = loc_match.group(2).strip()
+        
+        # Join remaining lines for further parsing
+        remaining_text = " ".join(remaining_lines)
+        
+        # Extract focus areas (B2B / B2C / B2G)
+        focus = ", ".join(re.findall(r'\bB2[BGC]\b', remaining_text))
+        
+        # Extract description (find text between B2X and "Team of" or other specific patterns)
+        description = ""
+        # Remove +numbers from text
+        clean_text = re.sub(r'\+\d+', '', remaining_text)
+        
+        # Find description between focus areas and team info
+        desc_pattern = r'(?:B2[BGC]\s*(?:\+\d+\s*)?)(.*?)(?:Team of|\€|\$|funding|Next raising|$)'
+        desc_match = re.search(desc_pattern, clean_text, re.DOTALL)
+        if desc_match:
+            description = desc_match.group(1).strip()
+        
+        # Extract team info
+        team_size = ""
+        team_members = ""
+        team_match = re.search(r'Team of\s+(\d+)\s+•\s+([^€$\n]+)', remaining_text)
+        if team_match:
+            team_size = team_match.group(1)
+            team_members = team_match.group(2).strip()
+        
+        # Extract funding information
+        funding_info = ""
+        funding_match = re.search(r'(€\d+[KMB]?|$\d+[KMB]?)\s*(?:funding from\s*([^€$\n]+))?', remaining_text)
+        if funding_match:
+            amount = funding_match.group(1)
+            investors_list = funding_match.group(2) if funding_match.group(2) else ""
+            funding_info = f"{amount} from {investors_list}".strip()
+        
+        # Extract next raising info
+        next_raising = ""
+        next_match = re.search(r'Next raising\s+([^€$\n]+)\s+of\s+(€\d+[KMB]?|$\d+[KMB]?)', remaining_text)
+        if next_match:
+            round_type = next_match.group(1).strip()
+            amount = next_match.group(2).strip()
+            next_raising = f"{round_type} of {amount}"
 
         investors.append({
+            "Company Type": company_type,
             "Company Name": company_name,
             "Location": location,
             "Founded": year,
@@ -122,8 +163,8 @@ def extract_investor_data(data):
             "Description": description,
             "Team Size": team_size,
             "Team Members": team_members,
-            "Notable Investments": notable_investments,
-            "Ticket Size": ticket_size
+            "Funding": funding_info,
+            "Next Raising": next_raising
         })
 
     return investors
