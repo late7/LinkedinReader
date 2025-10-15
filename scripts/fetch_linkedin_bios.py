@@ -5,9 +5,18 @@ The script reads the workbook located at the repository root (``LinkedIN.xlsx``)
 requests the public profile pages and extracts the bio/description meta tag, and
 writes a new workbook with the collected information to ``Results``.
 
+Optional Features:
+- Background Check (--bg): Uses OpenAI API to perform AI-powered background checks
+  on LinkedIn profiles. Requires OpenAI API key in environment or .env file.
+- Company Lookup (--company): Uses OpenAI API to find company information for the
+  person's current employer, including email, phone, company type, industry, and revenue.
+- Verbose Mode (--verbose): Prints detailed results to terminal as well as saving to Excel.
+
+Output files are automatically timestamped to avoid conflicts.
+
 The implementation relies solely on Python's standard library so that it works
 in restricted execution environments where additional packages cannot be
-installed.
+installed. The OpenAI package is only required when using background checks or company lookup.
 """
 from __future__ import annotations
 
@@ -19,12 +28,259 @@ import urllib.error
 import urllib.request
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
+from datetime import datetime
 from html import unescape
 from html.parser import HTMLParser
-from typing import Dict, Iterable, List, Sequence
+from typing import Dict, Iterable, List, Optional, Sequence
 from zipfile import ZipFile
 
 NAMESPACE = {"main": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
+
+
+def load_env_file(env_path: str = None) -> Dict[str, str]:
+    """Load environment variables from a .env file.
+    
+    Args:
+        env_path: Path to the .env file. If None, looks for .env in the repository root.
+        
+    Returns:
+        Dictionary of environment variables.
+    """
+    if env_path is None:
+        env_path = os.path.join(os.path.dirname(__file__), "..", ".env")
+    
+    env_vars: Dict[str, str] = {}
+    
+    if not os.path.exists(env_path):
+        return env_vars
+    
+    try:
+        with open(env_path, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith('#') and '=' in line:
+                    key, value = line.split('=', 1)
+                    env_vars[key.strip()] = value.strip()
+    except Exception:
+        # Silently ignore errors reading .env file
+        pass
+    
+    return env_vars
+
+
+def get_openai_api_key() -> str:
+    """Get the OpenAI API key from environment variables or .env file.
+    
+    Returns:
+        The OpenAI API key, or empty string if not found.
+    """
+    # First check environment variables
+    api_key = os.environ.get('OPENAI_API_KEY', '')
+    if api_key:
+        return api_key
+    
+    # Then check .env file
+    env_vars = load_env_file()
+    return env_vars.get('OPENAI_API_KEY', '')
+
+
+def perform_background_check(url: str, api_key: str) -> str:
+    """Perform a background check on a LinkedIn profile using OpenAI.
+    
+    Args:
+        url: LinkedIn profile URL
+        api_key: OpenAI API key
+        
+    Returns:
+        Background check results or error message
+    """
+    if not url or not api_key:
+        return "Background check skipped: Missing URL or API key"
+    
+    try:
+        # Import OpenAI here to avoid dependency issues if not using background checks
+        try:
+            from openai import OpenAI
+        except ImportError:
+            return "ERROR: OpenAI package not installed. Run: pip install openai"
+        
+        client = OpenAI(api_key=api_key)
+        
+        response = client.responses.create(
+            model="gpt-4o",  # Using gpt-4o instead of gpt-5 as it's more widely available
+            input=[
+                {
+                    "role": "developer",
+                    "content": [
+                        {
+                            "type": "input_text",
+                            "text": "What are the main achievements of this entrepreneur:"
+                        }
+                    ]
+                },
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "input_text",
+                            "text": url
+                        }
+                    ]
+                }
+            ],
+            text={
+                "format": {
+                    "type": "text"
+                },
+                "verbosity": "medium"
+            },
+            reasoning={
+                "effort": "medium",
+                "summary": "auto"
+            },
+            tools=[
+                {
+                    "type": "web_search",
+                    "user_location": {
+                        "type": "approximate",
+                        "country": "US",
+                        "city": "NYC"
+                    },
+                    "search_context_size": "medium"
+                }
+            ],
+            store=False,
+            include=[
+                "reasoning.encrypted_content",
+                "web_search_call.action.sources"
+            ]
+        )
+        
+        # Extract the response content
+        if hasattr(response, 'content') and response.content:
+            return response.content
+        elif hasattr(response, 'text') and response.text:
+            return response.text
+        else:
+            return "Background check completed but no content returned"
+            
+    except Exception as exc:
+        return f"ERROR during background check: {exc}"
+
+
+def lookup_company_info(url: str, api_key: str) -> str:
+    """Look up company information for the person's current employer using OpenAI.
+    
+    Args:
+        url: LinkedIn profile URL
+        api_key: OpenAI API key
+        
+    Returns:
+        Company information or error message
+    """
+    if not url or not api_key:
+        return "Company lookup skipped: Missing URL or API key"
+    
+    try:
+        # Import OpenAI here to avoid dependency issues if not using company lookup
+        try:
+            from openai import OpenAI
+        except ImportError:
+            return "ERROR: OpenAI package not installed. Run: pip install openai"
+        
+        client = OpenAI(api_key=api_key)
+        
+        response = client.responses.create(
+            model="gpt-4o",
+            input=[
+                {
+                    "role": "developer",
+                    "content": [
+                        {
+                            "type": "input_text",
+                            "text": "Find the current company information for this person. Provide the following details in English: Email, Phone number, Company type, Industry, Latest revenue. If information is not available, write 'Not available' for that field."
+                        }
+                    ]
+                },
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "input_text",
+                            "text": url
+                        }
+                    ]
+                }
+            ],
+            text={
+                "format": {
+                    "type": "text"
+                },
+                "verbosity": "medium"
+            },
+            reasoning={
+                "effort": "medium",
+                "summary": "auto"
+            },
+            tools=[
+                {
+                    "type": "web_search",
+                    "user_location": {
+                        "type": "approximate",
+                        "country": "US",
+                        "city": "NYC"
+                    },
+                    "search_context_size": "medium"
+                }
+            ],
+            store=False,
+            include=[
+                "reasoning.encrypted_content",
+                "web_search_call.action.sources"
+            ]
+        )
+        
+        # Extract the response content
+        if hasattr(response, 'content') and response.content:
+            return response.content
+        elif hasattr(response, 'text') and response.text:
+            return response.text
+        else:
+            return "Company lookup completed but no content returned"
+            
+    except Exception as exc:
+        return f"ERROR during company lookup: {exc}"
+
+
+def print_verbose_results(row_number: int, url: str, bio: str, bg_check: str = None, company_info: str = None) -> None:
+    """Print results to terminal in verbose mode.
+    
+    Args:
+        row_number: Row number being processed
+        url: LinkedIn URL
+        bio: Extracted bio
+        bg_check: Background check results (optional)
+        company_info: Company information (optional)
+    """
+    print(f"\n{'='*80}")
+    print(f"ROW {row_number} RESULTS")
+    print(f"{'='*80}")
+    print(f"URL: {url}")
+    print(f"\nBIO:")
+    print(f"{'-'*40}")
+    print(bio if bio else "No bio found")
+    
+    if bg_check is not None:
+        print(f"\nBACKGROUND CHECK:")
+        print(f"{'-'*40}")
+        print(bg_check)
+    
+    if company_info is not None:
+        print(f"\nCOMPANY INFORMATION:")
+        print(f"{'-'*40}")
+        print(company_info)
+    
+    print(f"{'='*80}\n")
 
 
 class MetaTagParser(HTMLParser):
@@ -261,10 +517,19 @@ class ExecutionConfig:
     input_path: str
     output_path: str
     delay: float
+    openai_api_key: str
+    background_check: bool
+    company_lookup: bool
+    verbose: bool
 
 
 def parse_args(argv: Sequence[str]) -> ExecutionConfig:
     parser = argparse.ArgumentParser(description=__doc__)
+    
+    # Generate timestamped default output filename
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    default_output = os.path.join(os.path.dirname(__file__), "..", "Results", f"LinkedIn_Bios_{timestamp}.xlsx")
+    
     parser.add_argument(
         "--input",
         default=os.path.join(os.path.dirname(__file__), "..", "LinkedIN.xlsx"),
@@ -272,8 +537,8 @@ def parse_args(argv: Sequence[str]) -> ExecutionConfig:
     )
     parser.add_argument(
         "--output",
-        default=os.path.join(os.path.dirname(__file__), "..", "Results", "LinkedIn_Bios.xlsx"),
-        help="Path for the generated workbook (default: Results/LinkedIn_Bios.xlsx)",
+        default=default_output,
+        help=f"Path for the generated workbook (default: Results/LinkedIn_Bios_{{timestamp}}.xlsx)",
     )
     parser.add_argument(
         "--delay",
@@ -281,14 +546,71 @@ def parse_args(argv: Sequence[str]) -> ExecutionConfig:
         default=0.0,
         help="Optional delay in seconds between HTTP requests",
     )
+    parser.add_argument(
+        "--bg",
+        action="store_true",
+        default=False,
+        help="Enable background check using OpenAI (requires OpenAI API key)",
+    )
+    parser.add_argument(
+        "--company",
+        action="store_true",
+        default=False,
+        help="Enable company information lookup using OpenAI (requires OpenAI API key)",
+    )
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        default=False,
+        help="Enable verbose mode - print results to terminal as well as saving to Excel",
+    )
     args = parser.parse_args(argv)
     input_path = os.path.abspath(args.input)
     output_path = os.path.abspath(args.output)
-    return ExecutionConfig(input_path=input_path, output_path=output_path, delay=max(0.0, args.delay))
+    openai_api_key = get_openai_api_key()
+    return ExecutionConfig(
+        input_path=input_path, 
+        output_path=output_path, 
+        delay=max(0.0, args.delay),
+        openai_api_key=openai_api_key,
+        background_check=args.bg,
+        company_lookup=args.company,
+        verbose=args.verbose
+    )
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     config = parse_args(argv or sys.argv[1:])
+
+    # Display OpenAI API key status (without exposing the actual key)
+    if config.openai_api_key:
+        print(f"OpenAI API key loaded (length: {len(config.openai_api_key)} characters)")
+    else:
+        print("No OpenAI API key found in environment or .env file")
+    
+    # Display background check status
+    if config.background_check:
+        if config.openai_api_key:
+            print("Background check enabled - will perform AI-powered background checks")
+        else:
+            print("WARNING: Background check requested but no OpenAI API key available")
+    else:
+        print("Background check disabled")
+    
+    # Display company lookup status
+    if config.company_lookup:
+        if config.openai_api_key:
+            print("Company lookup enabled - will perform AI-powered company information lookup")
+        else:
+            print("WARNING: Company lookup requested but no OpenAI API key available")
+    else:
+        print("Company lookup disabled")
+    
+    # Display verbose mode status
+    if config.verbose:
+        print("Verbose mode enabled - results will be printed to terminal")
+    else:
+        print("Verbose mode disabled")
 
     if not os.path.exists(config.input_path):
         print(f"Input workbook not found: {config.input_path}", file=sys.stderr)
@@ -314,24 +636,106 @@ def main(argv: Sequence[str] | None = None) -> int:
         bio_index = len(header)
         header = header + ["Bio"]
 
+    # Add background check column if background check is enabled
+    if config.background_check:
+        try:
+            bg_check_index = header.index("Background Check")
+        except ValueError:
+            bg_check_index = len(header)
+            header = header + ["Background Check"]
+    else:
+        bg_check_index = None
+
+    # Add company information column if company lookup is enabled
+    if config.company_lookup:
+        try:
+            company_info_index = header.index("Company Info")
+        except ValueError:
+            company_info_index = len(header)
+            header = header + ["Company Info"]
+    else:
+        company_info_index = None
+
     output_rows: List[List[str]] = [list(header)]
 
     for row_number, row in enumerate(rows_data, start=2):
-        row = list(row) + [""] * max(0, bio_index + 1 - len(row))
+        # Ensure row has enough columns for all operations
+        max_needed_indices = [bio_index]
+        if bg_check_index is not None:
+            max_needed_indices.append(bg_check_index)
+        if company_info_index is not None:
+            max_needed_indices.append(company_info_index)
+        max_needed_index = max(max_needed_indices)
+        
+        row = list(row) + [""] * max(0, max_needed_index + 1 - len(row))
+        
         url = row[url_index].strip()
         if url:
-            print(f"Fetching bio for row {row_number}: {url}")
+            print(f"Processing row {row_number}: {url}")
+            
+            # Fetch bio
+            print(f"  - Fetching bio...")
             bio = fetch_profile_bio(url)
+            row[bio_index] = bio
+            
+            # Initialize variables for verbose output
+            bg_check_result = None
+            company_info_result = None
+            
+            # Perform background check if enabled
+            if config.background_check and bg_check_index is not None:
+                print(f"  - Performing background check...")
+                bg_check_result = perform_background_check(url, config.openai_api_key)
+                row[bg_check_index] = bg_check_result
+            
+            # Perform company lookup if enabled
+            if config.company_lookup and company_info_index is not None:
+                print(f"  - Looking up company information...")
+                company_info_result = lookup_company_info(url, config.openai_api_key)
+                row[company_info_index] = company_info_result
+            
+            # Print verbose results if enabled
+            if config.verbose:
+                print_verbose_results(
+                    row_number=row_number,
+                    url=url,
+                    bio=bio,
+                    bg_check=bg_check_result,
+                    company_info=company_info_result
+                )
+            
             if config.delay:
                 time.sleep(config.delay)
         else:
-            bio = ""
-        row[bio_index] = bio
+            row[bio_index] = ""
+            if config.background_check and bg_check_index is not None:
+                row[bg_check_index] = ""
+            if config.company_lookup and company_info_index is not None:
+                row[company_info_index] = ""
+            
+            if config.verbose:
+                print(f"\nRow {row_number}: No URL provided - skipping\n")
+        
         output_rows.append(row[: len(header)])
 
     os.makedirs(os.path.dirname(config.output_path), exist_ok=True)
     write_rows_to_workbook(config.output_path, output_rows)
     print(f"Saved results to {config.output_path}")
+    
+    # Print summary in verbose mode
+    if config.verbose:
+        total_processed = len([row for row in rows_data if row[url_index].strip()])
+        print(f"\n{'='*80}")
+        print(f"PROCESSING SUMMARY")
+        print(f"{'='*80}")
+        print(f"Total profiles processed: {total_processed}")
+        print(f"Output file: {config.output_path}")
+        if config.background_check:
+            print("✓ Background checks performed")
+        if config.company_lookup:
+            print("✓ Company information lookups performed")
+        print(f"{'='*80}")
+    
     return 0
 
 
