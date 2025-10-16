@@ -155,6 +155,7 @@ def extract_investor_data(data):
             next_raising = f"{round_type} of {amount}"
 
         investors.append({
+            "Filename": "",  # Will be set by process_single_file function
             "Company Type": company_type,
             "Company Name": company_name,
             "Location": location,
@@ -197,6 +198,11 @@ def process_single_file(filename, verbose=False):
         print("🔍 Extracting investor data...")
         investors = extract_investor_data(data)
         print(f"✅ Extracted {len(investors)} investors from {filename}")
+        
+        # Add filename (without .txt extension) to each record
+        filename_without_ext = filename.replace('.txt', '') if filename.endswith('.txt') else filename
+        for investor in investors:
+            investor["Filename"] = filename_without_ext
         
         # Print verbose output if requested
         if verbose:
@@ -242,11 +248,6 @@ def main():
         # Create output filename with timestamp
         timestamp = generate_timestamp()
         output_filename = f"{timestamp}_export.xlsx"
-        
-        # Add source file information to each investor record
-        for i, investor in enumerate(all_investors):
-            # Find which file this investor came from (simplified approach)
-            investor["Source File"] = "Combined" if args.all else processed_files[0]
         
         # Save to Excel
         print(f"💾 Saving combined data to Excel: {output_filename}")
