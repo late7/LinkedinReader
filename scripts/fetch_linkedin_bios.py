@@ -37,7 +37,7 @@ from zipfile import ZipFile
 NAMESPACE = {"main": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
 
 
-def load_env_file(env_path: str = None) -> Dict[str, str]:
+def load_env_file(env_path: str = None) -> Dict[str, str]: # type: ignore
     """Load environment variables from a .env file.
     
     Args:
@@ -152,15 +152,15 @@ def perform_background_check(url: str, api_key: str) -> str:
             store=False,
             include=[
                 "reasoning.encrypted_content",
-                "web_search_call.action.sources"
+                "web_search_call.action.sources" # type: ignore
             ]
         )
         
         # Extract the response content
-        if hasattr(response, 'content') and response.content:
-            return response.content
+        if hasattr(response, 'content') and response.content: # type: ignore
+            return response.content # type: ignore
         elif hasattr(response, 'text') and response.text:
-            return response.text
+            return response.text # type: ignore
         else:
             return "Background check completed but no content returned"
             
@@ -236,15 +236,15 @@ def lookup_company_info(url: str, api_key: str) -> str:
             store=False,
             include=[
                 "reasoning.encrypted_content",
-                "web_search_call.action.sources"
+                "web_search_call.action.sources" # type: ignore
             ]
         )
         
         # Extract the response content
-        if hasattr(response, 'content') and response.content:
-            return response.content
+        if hasattr(response, 'content') and response.content: # type: ignore
+            return response.content # type: ignore
         elif hasattr(response, 'text') and response.text:
-            return response.text
+            return response.text # type: ignore
         else:
             return "Company lookup completed but no content returned"
             
@@ -252,7 +252,7 @@ def lookup_company_info(url: str, api_key: str) -> str:
         return f"ERROR during company lookup: {exc}"
 
 
-def print_verbose_results(row_number: int, url: str, bio: str, bg_check: str = None, company_info: str = None) -> None:
+def print_verbose_results(row_number: int, url: str, bio: str, bg_check: str = None, company_info: str = None) -> None: # type: ignore
     """Print results to terminal in verbose mode.
     
     Args:
@@ -700,8 +700,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                     row_number=row_number,
                     url=url,
                     bio=bio,
-                    bg_check=bg_check_result,
-                    company_info=company_info_result
+                    bg_check=bg_check_result, # type: ignore
+                    company_info=company_info_result # type: ignore
                 )
             
             if config.delay:
