@@ -92,8 +92,8 @@ def research_investor_with_web(company_name: str, city: str, api_key: str) -> Di
     "Stage": ["Seed", "Series A", "etc"],
     "TicketSize": {
       "Currency": "EUR/USD",
-      "Range": "€X - €Y",
-      "Typical": "Around €X"
+      "Min": "€X",
+      "Max": "€Y"
     },
     "SectorFocus": [
       "Technology",
@@ -168,7 +168,8 @@ def research_investor_with_web(company_name: str, city: str, api_key: str) -> Di
             return {
                 "Website": "ERROR: No web search response",
                 "Investment_Stage": "",
-                "Ticket_Size": "",
+                "Ticket_Size_Min": "",
+                "Ticket_Size_Max": "",
                 "Sector_Focus": "",
                 "Investment_Strategy": "",
                 "Error": "No web search response"
@@ -192,11 +193,11 @@ def research_investor_with_web(company_name: str, city: str, api_key: str) -> Di
             ticket_info = investment_profile.get('TicketSize', {})
             if isinstance(ticket_info, dict):
                 currency = ticket_info.get('Currency', '')
-                range_val = ticket_info.get('Range', '')
-                typical = ticket_info.get('Typical', '')
-                ticket_str = f"{range_val} ({typical})" if range_val and typical else range_val or typical
+                min_val = ticket_info.get('Min', '')
+                max_val = ticket_info.get('Max', '')
             else:
-                ticket_str = str(ticket_info)
+                min_val = str(ticket_info)
+                max_val = str(ticket_info)
             
             # Format sector focus
             sectors = investment_profile.get('SectorFocus', [])
@@ -208,7 +209,8 @@ def research_investor_with_web(company_name: str, city: str, api_key: str) -> Di
             return {
                 "Website": website,
                 "Investment_Stage": stage_str,
-                "Ticket_Size": ticket_str,
+                "Ticket_Size_Min": min_val,
+                "Ticket_Size_Max": max_val,
                 "Sector_Focus": sector_str,
                 "Investment_Strategy": strategy,
                 "Error": ""
@@ -221,7 +223,8 @@ def research_investor_with_web(company_name: str, city: str, api_key: str) -> Di
             return {
                 "Website": "Web Search JSON Parse Error",
                 "Investment_Stage": "",
-                "Ticket_Size": "",
+                "Ticket_Size_Min": "",
+                "Ticket_Size_Max": "",
                 "Sector_Focus": "",
                 "Investment_Strategy": truncated_response,
                 "Error": f"Web search JSON parsing failed: {json_err}"
@@ -232,7 +235,8 @@ def research_investor_with_web(company_name: str, city: str, api_key: str) -> Di
         return {
             "Website": f"Web Search ERROR: {exc}",
             "Investment_Stage": "",
-            "Ticket_Size": "",
+            "Ticket_Size_Min": "",
+            "Ticket_Size_Max": "",
             "Sector_Focus": "",
             "Investment_Strategy": "",
             "Error": str(exc)
@@ -254,7 +258,8 @@ def research_investor(company_name: str, city: str, api_key: str) -> Dict[str, s
         return {
             "Website": "ERROR: Missing company name or API key",
             "Investment_Stage": "",
-            "Ticket_Size": "",
+            "Ticket_Size_Min": "",
+            "Ticket_Size_Max": "",
             "Sector_Focus": "",
             "Investment_Strategy": "",
             "Error": "Missing data"
@@ -268,7 +273,8 @@ def research_investor(company_name: str, city: str, api_key: str) -> Dict[str, s
             return {
                 "Website": "ERROR: OpenAI package not installed",
                 "Investment_Stage": "",
-                "Ticket_Size": "",
+                "Ticket_Size_Min": "",
+                "Ticket_Size_Max": "",
                 "Sector_Focus": "",
                 "Investment_Strategy": "",
                 "Error": "Missing OpenAI package"
@@ -292,8 +298,8 @@ def research_investor(company_name: str, city: str, api_key: str) -> Dict[str, s
     "Stage": ["Seed", "Series A", "etc"],
     "TicketSize": {
       "Currency": "EUR/USD",
-      "Range": "€X - €Y",
-      "Typical": "Around €X"
+      "Min": "€X",
+      "Max": "€Y"
     },
     "SectorFocus": [
       "Technology",
@@ -349,7 +355,8 @@ def research_investor(company_name: str, city: str, api_key: str) -> Dict[str, s
             return {
                 "Website": f"API Error: {api_exc}",
                 "Investment_Stage": "",
-                "Ticket_Size": "",
+                "Ticket_Size_Min": "",
+                "Ticket_Size_Max": "",
                 "Sector_Focus": "",
                 "Investment_Strategy": "",
                 "Error": f"API call failed: {api_exc}"
@@ -380,7 +387,8 @@ def research_investor(company_name: str, city: str, api_key: str) -> Dict[str, s
             return {
                 "Website": "ERROR: Cannot extract response text",
                 "Investment_Stage": "",
-                "Ticket_Size": "",
+                "Ticket_Size_Min": "",
+                "Ticket_Size_Max": "",
                 "Sector_Focus": "",
                 "Investment_Strategy": "",
                 "Error": "Cannot extract response text"
@@ -391,7 +399,8 @@ def research_investor(company_name: str, city: str, api_key: str) -> Dict[str, s
             return {
                 "Website": "ERROR: Empty response",
                 "Investment_Stage": "",
-                "Ticket_Size": "",
+                "Ticket_Size_Min": "",
+                "Ticket_Size_Max": "",
                 "Sector_Focus": "",
                 "Investment_Strategy": "",
                 "Error": "Empty response"
@@ -417,11 +426,11 @@ def research_investor(company_name: str, city: str, api_key: str) -> Dict[str, s
             ticket_info = investment_profile.get('TicketSize', {})
             if isinstance(ticket_info, dict):
                 currency = ticket_info.get('Currency', '')
-                range_val = ticket_info.get('Range', '')
-                typical = ticket_info.get('Typical', '')
-                ticket_str = f"{range_val} ({typical})" if range_val and typical else range_val or typical
+                min_val = ticket_info.get('Min', '')
+                max_val = ticket_info.get('Max', '')
             else:
-                ticket_str = str(ticket_info)
+                min_val = str(ticket_info)
+                max_val = str(ticket_info)
             
             # Format sector focus
             sectors = investment_profile.get('SectorFocus', [])
@@ -434,7 +443,8 @@ def research_investor(company_name: str, city: str, api_key: str) -> Dict[str, s
             is_empty_response = (
                 not website or website in ["[website.com]", ""] or
                 not stage_str or stage_str in ["etc", ""] or
-                not ticket_str or ticket_str in ["€X - €Y", "Around €X", ""] or
+                not min_val or min_val in ["€X", ""] or
+                not max_val or max_val in ["€Y", ""] or
                 not sector_str or sector_str in ["etc", ""] or
                 not strategy or strategy in ["Brief strategy description", ""]
             )
@@ -453,7 +463,8 @@ def research_investor(company_name: str, city: str, api_key: str) -> Dict[str, s
             return {
                 "Website": website,
                 "Investment_Stage": stage_str,
-                "Ticket_Size": ticket_str,
+                "Ticket_Size_Min": min_val,
+                "Ticket_Size_Max": max_val,
                 "Sector_Focus": sector_str,
                 "Investment_Strategy": strategy,
                 "Error": ""
@@ -467,7 +478,8 @@ def research_investor(company_name: str, city: str, api_key: str) -> Dict[str, s
             return {
                 "Website": "JSON Parse Error",
                 "Investment_Stage": "",
-                "Ticket_Size": "",
+                "Ticket_Size_Min": "",
+                "Ticket_Size_Max": "",
                 "Sector_Focus": "",
                 "Investment_Strategy": truncated_response,
                 "Error": f"JSON parsing failed: {json_err}"
@@ -479,7 +491,8 @@ def research_investor(company_name: str, city: str, api_key: str) -> Dict[str, s
         return {
             "Website": f"ERROR: {exc}",
             "Investment_Stage": "",
-            "Ticket_Size": "",
+            "Ticket_Size_Min": "",
+            "Ticket_Size_Max": "",
             "Sector_Focus": "",
             "Investment_Strategy": "",
             "Error": str(exc)
@@ -514,8 +527,8 @@ def parse_args():
     parser.add_argument(
         "--start-row",
         type=int,
-        default=2,
-        help="Row to start processing from (default: 2, assuming row 1 is headers)"
+        default=1,
+        help="Row to start processing from (default: 1)"
     )
     parser.add_argument(
         "--max-rows",
@@ -537,7 +550,8 @@ def print_verbose_result(row_num: int, company: str, city: str, result: Dict[str
     print(f"{'─'*40}")
     print(f"Website: {result['Website']}")
     print(f"Investment Stage: {result['Investment_Stage']}")
-    print(f"Ticket Size: {result['Ticket_Size']}")
+    print(f"Ticket Size Min: {result['Ticket_Size_Min']}")
+    print(f"Ticket Size Max: {result['Ticket_Size_Max']}")
     print(f"Sector Focus: {result['Sector_Focus']}")
     print(f"Strategy: {result['Investment_Strategy']}")
     if result['Error']:
@@ -607,7 +621,7 @@ def main():
         print(f"🔍 Processing rows {start_row + 1} to {end_row} ({rows_to_process} total)")
         
         # Add new columns for results
-        new_columns = ['Website', 'Investment_Stage', 'Ticket_Size', 'Sector_Focus', 'Investment_Strategy']
+        new_columns = ['Website', 'Investment_Stage', 'Ticket_Size_Min', 'Ticket_Size_Max', 'Sector_Focus', 'Investment_Strategy']
         for col in new_columns:
             if col not in df.columns:
                 df[col] = ""
@@ -635,7 +649,8 @@ def main():
                 # Update the dataframe using .at for cleaner assignment
                 df.at[idx, 'Website'] = result['Website']
                 df.at[idx, 'Investment_Stage'] = result['Investment_Stage']
-                df.at[idx, 'Ticket_Size'] = result['Ticket_Size']
+                df.at[idx, 'Ticket_Size_Min'] = result['Ticket_Size_Min']
+                df.at[idx, 'Ticket_Size_Max'] = result['Ticket_Size_Max']
                 df.at[idx, 'Sector_Focus'] = result['Sector_Focus']
                 df.at[idx, 'Investment_Strategy'] = result['Investment_Strategy']
                 
