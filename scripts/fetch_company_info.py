@@ -119,7 +119,7 @@ Response only JSON, no references, background data, nothing else."""
         
         try:
             response = client.responses.create(
-                model="gpt-5-mini",
+                model="gpt-5-nano",
                 input=[
                     {
                         "role": "developer",
@@ -133,6 +133,7 @@ Response only JSON, no references, background data, nothing else."""
                     {
                         "role": "user",
                         "content": [
+                            
                             {
                                 "type": "input_text",
                                 "text": user_prompt
